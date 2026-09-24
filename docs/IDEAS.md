@@ -70,6 +70,21 @@ in docs/DECISIONS.md if it changes an architecture rule).
   and how this combines with the replay limits above. Goal for both
   ideas: as close as possible to real picking by ear.
 
+## Children
+
+- A kids' mode. Same core loop, different skin and pacing: bigger keys
+  (maybe 5 per screen, C–G only at first), colors or animal/character
+  stickers instead of note names, 2–3 note melodies, every attempt ends
+  in something cheerful (no red dots, no "Not quite" — "almost! listen
+  again" and the melody replays), sessions of 1–2 minutes, a reward for
+  finishing (a sticker, a growing garden, a little tune the collected
+  notes play). Sound matters even more here: no harsh tones. Consider a
+  "sing it" variant later (children sing before they play). Grown-up
+  concerns to settle before building: a parent gate for settings and
+  purchases, no accounts or data collection (COPPA / GDPR-K), Google
+  Play's "Designed for Families" rules if it's marketed to kids. Could
+  be the wedge for a family plan once monetization exists.
+
 ## Motivation & retention
 
 - Achievements/badges beyond the daily streak (e.g. "first perfect
