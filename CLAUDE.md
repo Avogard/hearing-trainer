@@ -20,6 +20,8 @@ two reasonable options, name both and recommend one.
 - Install:    ./gradlew installDebug   (phone connected, USB debugging on)
 - Lint:       ./gradlew lint
 - Logs:       adb logcat -s HearingTrainer
+- Core-only tests without the Android SDK: tools/verify-core.sh
+- Re-render piano samples: python3 tools/render_piano_samples.py
 
 ## Architecture rules
 
@@ -27,12 +29,16 @@ two reasonable options, name both and recommend one.
   intervals), melody generator, answer scoring, difficulty ladder.
   Fully unit-tested. This code must stay portable (future iOS via KMP).
 - `audio/`: playback of notes (sampled piano). The only place that
-  touches audio APIs. Start with SoundPool; move to Oboe only if latency
-  is a measured problem.
+  touches audio APIs. A small software mixer on AudioTrack
+  (`MixerNotePlayer`) plays one bundled WAV per note; move to Oboe only
+  if latency is a measured problem. Samples are rendered by
+  `tools/render_piano_samples.py` (needs numpy) — re-run it after
+  changing its constants; never hand-edit the WAVs.
 - `ui/`: Compose screens and ViewModels. MVVM, unidirectional data flow,
   one ViewModel per screen.
-- `data/`: persistence (DataStore for settings, Room for progress) and
-  reminders (WorkManager + local notifications).
+- `data/`: persistence (SharedPreferences for the two settings ints,
+  DataStore if settings grow; Room for progress) and reminders
+  (WorkManager + local notifications).
 - A note is an Int MIDI number everywhere in `core/` (60 = middle C).
   Durations are in beats (Double), tempo in BPM.
 
@@ -99,5 +105,9 @@ two reasonable options, name both and recommend one.
 
 ## Read first
 
+- docs/PLAN.md      where this is going: vision, learning model, features
+                    by phase, roadmap. Sections 7–9 drive what to build next.
 - docs/SPEC.md      what the app does (screens, rules, difficulty ladder)
 - docs/DECISIONS.md why it is built this way
+- docs/research/    the sourced research behind PLAN.md (pedagogy, learning
+                    science, landscape); consult before changing the engine

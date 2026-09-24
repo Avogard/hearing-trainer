@@ -7,14 +7,19 @@ package com.hearingtrainer.app.core
  */
 object DifficultyLevel {
 
-    /** Level 1: C major, 3 notes, range C4-G4, steps only, always starts on the root. */
-    fun level1(seed: Long): MelodySpec = MelodySpec(
+    /**
+     * Level 1: C major, range C4-G4, always starts on the root, max interval 4 semitones (steps
+     * and thirds — see the "Level 1 was nearly the same melody every time" decision in
+     * docs/DECISIONS.md for why this isn't 2). [length] comes from the user's settings; the
+     * default is [Config.DEFAULT_MELODY_LENGTH].
+     */
+    fun level1(seed: Long, length: Int = Config.DEFAULT_MELODY_LENGTH): MelodySpec = MelodySpec(
         rootNote = 60, // C4
         scale = Scale.MAJOR,
         lowestNote = 60, // C4
         highestNote = 67, // G4
-        length = 3,
-        maxInterval = 2,
+        length = length,
+        maxInterval = 4,
         startOnRootOnly = true,
         allowImmediateRepeats = false,
         seed = seed,

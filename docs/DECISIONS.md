@@ -121,8 +121,102 @@ feedback, tap Next for another one. `HomeScreen` is a placeholder with just a Pr
 streak and "done today" need `data/` (Room/DataStore), not built yet. `AnswerScorer` (core/, 5
 tests) does the right/wrong comparison.
 
-Not yet done, in rough priority order: wire a real streak/session via `data/`; the fixed
-10-melody session + summary screen from SPEC; levels 2-5 and ladder promotion; daily reminders
-(WorkManager); Settings screen. This project's `CLAUDE.md` also asks for a commit after each
-working milestone — Claude can't run `git` here (no shell on this machine from this session),
-so that commit is on you once you've verified the build.
+## 2026-09-23 — Fixed a stray duplicate MainActivity.kt and a bad Compose import blocking the build
+
+Two unrelated build breaks turned up while getting this first version to actually compile:
+a stray `MainActivity-1.kt` (an accidental duplicate of `MainActivity.kt` from an in-progress
+later batch) caused a duplicate-class error and was emptied out; and `PracticeScreen.kt` had
+an explicit `import androidx.compose.foundation.layout.weight`, which isn't needed —
+`Modifier.weight()` inside a `Column`/`Row` resolves automatically as a member of
+`ColumnScope`/`RowScope` — and was instead binding to an unrelated internal library symbol of
+the same name, breaking compilation with "it is internal in file". Removed the import; no
+behavior change.
+
+## 2026-09-23 — Level 1 was nearly the same melody every time: `maxInterval` fixed from 2 to 4 semitones
+
+Level 1's range (C4-G4) puts the root, C4, at the exact bottom edge. With `maxInterval = 2`
+semitones and "always starts on the root", C4's only in-range, in-scale note within 2
+semitones is D4 (E4 is 4 semitones away) — so the first two notes of every melody were forced
+to C4-D4 every single time, and only the third note varied (between C4 and E4). That's 2
+possible melodies total, which is what "melodies are almost always the same" was — not a
+seeding bug (each melody does use a fresh random seed), just an over-constrained parameter
+combination.
+
+Raised `maxInterval` to 4 semitones (letting the generator use thirds, not just steps) rather
+than changing the range or the "always starts on root" rule, since both of those are explicit,
+deliberate parts of docs/SPEC.md and changing the range would also require reworking the
+Practice screen's hardcoded one-octave keyboard window. With `maxInterval = 4` the same range
+and starting rule produce 7 distinct melodies instead of 2 (verified by simulating all 200
+seeds 0-199, both before and after). `DifficultyLevelTest` (`core/`, 2 new tests) pins this
+down as a regression test: across 200 seeds, Level 1 must produce at least 5 distinct melodies.
+docs/SPEC.md's difficulty ladder section updated to match.
+
+## 2026-09-24 — Per-note rendered samples + an AudioTrack mixer, instead of SoundPool + pitch shifting
+
+The first sound was "weird" for four concrete reasons, all visible in the files: the three
+synthesized samples were organ-like (nearly flat for 250 ms, still only -13 dB after a full
+second), then cut off abruptly at 1.6 s while still audible (a click); SoundPool stretched each
+one up to 6 semitones, which changes the timbre and adds resampling artifacts; melody timing
+came from `delay()` on the UI thread, so the rhythm jittered by 10-20 ms; and notes were never
+released, so they piled up on each other.
+
+Now: `tools/render_piano_samples.py` renders one WAV per MIDI note, C3-C6 (37 files, ~3.6 MB,
+48 kHz mono 16-bit) from a physically-informed piano model — inharmonic partials, a hammer-
+position comb, a soft-hammer low-pass, two-stage decay per partial, 2-3 detuned unison strings,
+a bandlimited soundboard knock, a little room. Nothing is pitch-shifted at runtime. The tone is
+deliberately soft, clear and short (middle C is 40 dB down within 0.6 s), tuned for pitch
+recognition rather than realism; presets in the script (`soft`, `bright`, `dry`) make a
+different taste one command away. Real recordings, if they ever become available, are a drop-in
+replacement: same file names, same format, no code change.
+
+`audio/MixerNotePlayer` replaces SoundPool: one audio thread mixes voices into 5 ms blocks and
+feeds `AudioTrack` (float PCM, low-latency mode). It's the standard "audio callback" shape, about
+200 lines, and gives what SoundPool can't: sample-accurate scheduling of a whole melody
+(`NotePlayer.playSequence`), a 60 ms release fade on note-off instead of a hard stop, voice
+stealing at 8 voices, and a soft clipper so overlapping notes compress instead of crackling.
+`core/MelodyTiming` (pure Kotlin, tested) turns notes + BPM into that schedule; the ViewModel
+only waits for the total duration to flip the UI back. Oboe/NDK remains the escape hatch if
+touch-to-sound latency is ever measured as a problem; it would replace only this class.
+
+Real sample libraries were considered again and are still unreachable from Claude's cloud
+workspace (GitHub raw, Maven, npm all blocked by policy); the only soundfont on the machine
+(TimGM6mb) is GPL-2, which would be a licensing problem for a monetized app, so it was not used.
+
+## 2026-09-24 — Answers are checked on demand, not auto-scored at the last note
+
+The user asked to hear what they played before committing. So the answer no longer scores itself
+the moment the last dot fills in: while answering there's Replay (the melody), My answer (the
+answer so far, at the same tempo), undo, and an explicit Check button that only enables once the
+answer is complete. After a wrong answer the correct melody plays once more (docs/SPEC.md step 3)
+and Replay / My answer stay available for comparing the two. Both behaviors are behind
+`core/Features.kt` flags (`HEAR_MY_ANSWER`, `REPLAY_MELODY_AFTER_WRONG_ANSWER`). Keys always
+sound, even outside answering, so the keyboard doubles as a keyboard.
+
+## 2026-09-24 — Settings: tempo and melody length only, in SharedPreferences (DataStore later, if ever)
+
+Two integers with defaults, clamped ranges and a Reset button. The default melody length went
+from 3 to 4 (owner's call); `DifficultyLevel.level1` now takes the length. Defaults and limits
+are in `core/Config.kt`, the model + `SettingsStore` interface in `core/PracticeSettings.kt`, and
+the Android implementation in `data/SharedPreferencesSettingsStore.kt`.
+
+SharedPreferences over DataStore (which docs/SPEC.md originally named): it is built in, synchronous
+and trivially correct for two ints, whereas DataStore adds a dependency plus Flow/coroutine
+plumbing that Claude can't compile-check from the cloud workspace. `ui/` only sees `SettingsStore`,
+so switching to DataStore later touches `data/` alone. Settings are read from the store each
+time a new melody starts, so a change on the Settings screen applies to the very next melody.
+
+## 2026-09-24 — Three screens, still no navigation library
+
+Home is the hub; Practice and Settings only ever go back to Home. `MainActivity.AppRoot` keeps a
+`rememberSaveable`d enum (survives rotation) and a `BackHandler` that returns to Home, so the
+system back button doesn't exit the app from Practice. Navigation Compose becomes worth it when
+Session Summary arrives and a real back stack matters.
+
+## 2026-09-24 — The Practice ViewModel owns the audio engine for the Activity's lifetime
+
+`viewModel()` in a composable without a navigation graph scopes the ViewModel to the Activity, so
+the previous code (engine created with `remember` in the screen, ViewModel keeping the first one)
+leaked a SoundPool every time you went Home and back. Now the factory builds `MixerNotePlayer` from
+the application context inside the ViewModel, `onCleared` releases it, and the screen's
+`DisposableEffect` calls `setActive(true/false)` so the audio output only runs while Practice is on
+screen. Returning to Practice also returns to the exact state you left (mid-answer included).
