@@ -252,3 +252,40 @@ sequence fades whatever is still sounding and would cut off the user's last note
 type `ScoredAnswer` (from `AnswerScorer.score`) was renamed `AnswerScore` to free the name.
 `core/Clock.kt` (interface) and `data/RealClock.kt` are the first use of the `Clock` boundary from
 CLAUDE.md.
+
+## 2026-09-25 — A I–IV–V–I cadence before each melody
+
+Scale-degree hearing needs a key: a note only *is* the 3rd or the 6th relative to a tonic, and
+without one the exercise degrades into interval matching from the previous note (docs/PLAN.md,
+"Key context" — the first and strongest level of support, faded later). So every melody, in both
+modes, is preceded by I–IV–V–I in its key, then a beat of silence; Replay plays the melody alone.
+
+Voicing: root-position major triads, one beat each, with the tonic root the highest note of its
+pitch class below the melody's range (C3 for the C4–G4 level) and IV and V built up from the roots
+in that octave: C3-E3-G3, F3-A3-C4, G3-B3-D4, C3-E3-G3. The IV and V chords reach the bottom of the
+melody range; root-position triads an octave below the melody can't avoid that, and pushing the
+cadence down another octave would go below the sampled range (C3 is the lowest sample) and be
+silent. So the guarantee is "chord roots in the octave below, tonic chord entirely below", not
+"every note below". Chords are three `TimedNote`s with the same start (the mixer already makes one
+voice per entry), so no second schedule type; `TimedNote` gained a `gain` because three tones at
+full level are 5–9 dB louder than the single notes that follow — `Config.CADENCE_GAIN` = 0.5 puts
+the cadence level with the melody. Cadence, gap and melody are one `playSequence` call, so the gap
+is sample-accurate. `core/TonalContext.kt`, major keys only; `Features.CADENCE_BEFORE_MELODY`.
+
+## 2026-09-25 — Attempts are logged as JSON lines from day one
+
+The adaptive engine planned in docs/PLAN.md fits its difficulty weights from real attempts, and a
+spaced-review schedule needs history — so the data has to start accumulating now, before either
+exists. Every finished melody, in both modes, appends one JSON object to `attempts.jsonl` in the
+app's private files directory: timestamp, mode, key root, melody, tempo, cadence played, replays
+used, outcome per position, every wrong press (position, target, pressed), response times, first-
+try count, total, silent keyboard. Free-play records are a trace only (mode = free, correct / wrong
+per position, first-try count 0) and must be filtered out of any statistic.
+
+JSON lines rather than Room: appending a line is one write, a half-written last line can't corrupt
+earlier ones, the file is readable with any tool, and Room arrives together with the engine that
+needs queries (with a migration that imports this file). The JSON is written by hand
+(`core/Json.kt`, one escaping function) — a serialization library for a dozen flat fields isn't
+worth a dependency. `core/AttemptRecord` + `core/AttemptLog` (interface); `data/FileAttemptLog`
+does the writing on its own single thread so the UI never waits for the disk and lines never
+interleave. `Features.LOG_ATTEMPTS`.

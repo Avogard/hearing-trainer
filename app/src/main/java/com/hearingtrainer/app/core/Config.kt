@@ -44,6 +44,18 @@ object Config {
      */
     const val REPLAY_AFTER_FINISH_GAP_BEATS = 1.0
 
+    // --- tonal context (core/TonalContext.kt) ---
+
+    /** Silence between the last cadence chord and the first melody note, in beats. */
+    const val CADENCE_GAP_BEATS = 1.0
+
+    /**
+     * Level of each cadence chord tone relative to a melody note. Three tones at full level sum to
+     * 5-9 dB louder than the single notes that follow and touch the clipper; at 0.5 the chords sit
+     * level with the melody.
+     */
+    const val CADENCE_GAIN = 0.5f
+
     // --- playback feel ---
 
     /**

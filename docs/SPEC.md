@@ -4,7 +4,9 @@ Status: draft. Edit freely; this is the source of truth for what the app does.
 
 ## The core loop (the only thing v1 must do well)
 
-1. User opens the app and taps **Play melody**. A short melody sounds.
+1. User opens the app and taps **Play melody**. A short cadence
+   (I–IV–V–I in the melody's key) sounds, then a beat of silence, then
+   the melody.
 2. User plays it back on the on-screen keyboard. In **Scored** mode
    (the default) every key press is final: a right note turns its dot
    green and the next position opens; a wrong note turns the dot red
@@ -77,7 +79,8 @@ one is being answered) and applies from the next melody on.
   the next position opens.
 - Replay is allowed `MAX_REPLAYS_BEFORE_FIRST_PRESS` (2) times, only
   before the first key press; the button shows how many are left and
-  is disabled from the first press on.
+  is disabled from the first press on. Replay plays the melody only,
+  without the cadence.
 - Per position the outcome is first try, found after wrong presses, or
   revealed. The score is first-try notes over all notes; a melody is
   clean when every note was first try. After the last position, if
@@ -95,11 +98,35 @@ one is being answered) and applies from the next melody on.
 
 **Free play** is the flow from before scored mode existed: keys sound
 and fill the strip, Replay / My answer / undo without limit, an
-explicit Check, then Next. Free-play results never count toward any
-score or statistic.
+explicit Check, then Next. The cadence still plays. Free-play results
+are logged with mode = free and never count toward any score or
+statistic.
+
+Both modes append one JSON line per finished melody to
+`attempts.jsonl` in the app's private files directory
+(`data/FileAttemptLog`): timestamp, mode, key root, melody, tempo,
+whether the cadence played, replays used, the outcome per position,
+every wrong press (position, target, pressed), response times, first-
+try count, total, and whether the keyboard was silent. Free-play
+records use correct / wrong per position and a first-try count of 0.
+The adaptive engine in docs/PLAN.md is built from this log.
 
 Flags in `core/Features.kt`: `SCORED_ANSWER_MODE`,
-`SILENT_SCORED_KEYBOARD`. Limits in `core/Config.kt`.
+`CADENCE_BEFORE_MELODY`, `SILENT_SCORED_KEYBOARD`, `LOG_ATTEMPTS`.
+Limits in `core/Config.kt`.
+
+## Tonal context
+
+Before each melody a I–IV–V–I cadence in its key: four root-position
+major triads, one beat each, at the user's tempo, then
+`CADENCE_GAP_BEATS` (1) of silence. The chord roots sit in the octave
+below the melody's range (the tonic chord entirely below it; IV and V
+may touch its bottom notes): for C major under a C4–G4 melody,
+C3-E3-G3, F3-A3-C4, G3-B3-D4, C3-E3-G3. Chord tones play at half level
+(`CADENCE_GAIN`) so the cadence sits under the melody rather than over
+it. Major keys only for now. `core/TonalContext.kt`; the schedule is
+built by `core/MelodyTiming.scheduleWithCadence` and played as one
+sample-accurate sequence with the melody.
 
 ## Sound
 
@@ -144,8 +171,10 @@ visit after the first completed session, not on launch.
 ## Persistence
 
 Settings in SharedPreferences (two integers; DataStore if it ever grows
-— see docs/DECISIONS.md). Progress (per-melody results, streak, level)
-in Room. No account, no backend in v1.
+— see docs/DECISIONS.md). Per-melody results in `attempts.jsonl` (JSON
+lines, `data/FileAttemptLog`) until the adaptive engine brings Room,
+which will import that file; streak and level in Room. No account, no
+backend in v1.
 
 ## Out of scope for v1
 

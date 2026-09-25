@@ -9,6 +9,8 @@ import com.hearingtrainer.app.audio.NotePlayer
 import com.hearingtrainer.app.core.AnswerMode
 import com.hearingtrainer.app.core.AnswerOutcome
 import com.hearingtrainer.app.core.AnswerScorer
+import com.hearingtrainer.app.core.AttemptLog
+import com.hearingtrainer.app.core.AttemptRecord
 import com.hearingtrainer.app.core.Clock
 import com.hearingtrainer.app.core.Config
 import com.hearingtrainer.app.core.DifficultyLevel
@@ -19,6 +21,9 @@ import com.hearingtrainer.app.core.PositionOutcome
 import com.hearingtrainer.app.core.PressResult
 import com.hearingtrainer.app.core.ScoredAnswer
 import com.hearingtrainer.app.core.SettingsStore
+import com.hearingtrainer.app.core.TimedNote
+import com.hearingtrainer.app.core.TonalContext
+import com.hearingtrainer.app.data.FileAttemptLog
 import com.hearingtrainer.app.data.RealClock
 import com.hearingtrainer.app.data.SharedPreferencesSettingsStore
 import kotlinx.coroutines.Job
@@ -94,21 +99,24 @@ data class PracticeUiState(
  * (CLAUDE.md: "MVVM, unidirectional data flow, one ViewModel per screen").
  *
  * Two answer modes (docs/SPEC.md, "Answer modes"), switched between melodies with [onModeSelected]:
- *  - Scored (default): Play -> the melody -> every key press is an answer, judged by a
+ *  - Scored (default): Play -> cadence, gap, melody -> every key press is an answer, judged by a
  *    [ScoredAnswer]; limited replays before the first press; too many wrong presses reveal the
  *    note; the melody finishes itself and, if anything wasn't a first try, plays once more.
- *  - Free play: Play -> the melody -> keys fill the strip, with unlimited Replay, My answer and
- *    undo -> Check scores it with [AnswerScorer] -> Next.
- * Only Level 1 exists so far (see [DifficultyLevel]); tempo and length come from settings.
+ *  - Free play: Play -> cadence, gap, melody -> keys fill the strip, with unlimited Replay,
+ *    My answer and undo -> Check scores it with [AnswerScorer] -> Next.
+ * Both modes log a record per finished melody. Only Level 1 exists so far (see [DifficultyLevel]);
+ * tempo and length come from settings.
  */
 class PracticeViewModel(
     private val notePlayer: NotePlayer,
     private val settingsStore: SettingsStore,
+    private val attemptLog: AttemptLog,
     private val clock: Clock,
 ) : ViewModel() {
 
     private var melody: List<Int> = emptyList()
     private var keyRoot: Int = 0
+    private var cadence: List<List<Int>> = emptyList()
     private var tempoBpm: Int = Config.DEFAULT_TEMPO_BPM
     private var scored: ScoredAnswer? = null
     private var freeReplays: Int = 0
@@ -128,13 +136,18 @@ class PracticeViewModel(
         _uiState.value = PracticeUiState(mode = mode)
     }
 
-    /** Starts a new melody with the current settings: generates it, then plays it. */
+    /** Starts a new melody with the current settings: generates it, then plays it (with its cadence). */
     fun onPlayClicked() {
         val settings = settingsStore.load()
         tempoBpm = settings.tempoBpm
         val spec = DifficultyLevel.level1(seed = Random.nextLong(), length = settings.melodyLength)
         melody = MelodyGenerator.generate(spec).notes
         keyRoot = spec.rootNote
+        cadence = if (Features.CADENCE_BEFORE_MELODY) {
+            TonalContext.cadenceChords(rootMidi = spec.rootNote, melodyLowest = spec.lowestNote)
+        } else {
+            emptyList()
+        }
         freeReplays = 0
         val mode = _uiState.value.mode
         val answer = if (mode == AnswerMode.SCORED) {
@@ -151,11 +164,11 @@ class PracticeViewModel(
             replayAllowed = answer?.canReplay() ?: true,
             replaysLeft = answer?.replaysLeft ?: 0,
         )
-        startPlayback(melody, Playback.MELODY)
+        startPlayback(MelodyTiming.scheduleWithCadence(cadence, melody, tempoBpm), Playback.MELODY)
     }
 
     /**
-     * Plays the melody again. Free play: any time after Play. Scored: only
+     * Plays the melody again (without the cadence). Free play: any time after Play. Scored: only
      * before the first press and only [Config.MAX_REPLAYS_BEFORE_FIRST_PRESS] times.
      */
     fun onReplayClicked() {
@@ -169,14 +182,14 @@ class PracticeViewModel(
         } else if (state.phase == PracticePhase.ANSWERING) {
             freeReplays++
         }
-        startPlayback(melody, Playback.MELODY)
+        startPlayback(MelodyTiming.schedule(melody, tempoBpm), Playback.MELODY)
     }
 
     /** Free play: plays back what the user has entered so far, at the same tempo as the melody. */
     fun onHearAnswerClicked() {
         val state = _uiState.value
         if (state.mode != AnswerMode.FREE || state.answer.isEmpty() || state.isPlaying) return
-        startPlayback(state.answer, Playback.ANSWER)
+        startPlayback(MelodyTiming.schedule(state.answer, tempoBpm), Playback.ANSWER)
     }
 
     /**
@@ -221,8 +234,19 @@ class PracticeViewModel(
                 dots = freeDots(state.answer, result.perNoteCorrect),
             )
         }
+        log(
+            AttemptRecord.free(
+                timestampMillis = clock.nowMillis(),
+                keyRoot = keyRoot,
+                melody = melody,
+                answer = state.answer,
+                tempoBpm = tempoBpm,
+                cadencePlayed = cadence.isNotEmpty(),
+                replaysUsed = freeReplays,
+            )
+        )
         if (!result.allCorrect && Features.REPLAY_MELODY_AFTER_WRONG_ANSWER) {
-            startPlayback(melody, Playback.MELODY)
+            startPlayback(MelodyTiming.schedule(melody, tempoBpm), Playback.MELODY)
         }
     }
 
@@ -255,13 +279,13 @@ class PracticeViewModel(
             )
         }
         val outcome = if (result.finished) answer.result() else null
-        if (outcome != null) finishScored(outcome)
+        if (outcome != null) finishScored(answer, outcome)
         val reveal = result as? PressResult.Revealed
         val replayMelody = outcome != null && !outcome.clean && Features.REPLAY_MELODY_AFTER_WRONG_ANSWER
         if (reveal != null || replayMelody) playAudioTail(reveal, replayMelody)
     }
 
-    private fun finishScored(outcome: AnswerOutcome) {
+    private fun finishScored(answer: ScoredAnswer, outcome: AnswerOutcome) {
         _uiState.update {
             it.copy(
                 phase = PracticePhase.CHECKED,
@@ -269,6 +293,18 @@ class PracticeViewModel(
                 feedbackLines = outcome.feedbackLines(),
             )
         }
+        log(
+            AttemptRecord.scored(
+                timestampMillis = clock.nowMillis(),
+                keyRoot = keyRoot,
+                melody = melody,
+                tempoBpm = tempoBpm,
+                cadencePlayed = cadence.isNotEmpty(),
+                replaysUsed = answer.replaysUsed,
+                outcome = outcome,
+                silentKeyboard = Features.SILENT_SCORED_KEYBOARD,
+            )
+        )
     }
 
     /**
@@ -292,8 +328,9 @@ class PracticeViewModel(
                 if (replayMelody) {
                     _uiState.update { it.copy(playback = Playback.MELODY) }
                     delay(millis(Config.REPLAY_AFTER_FINISH_GAP_BEATS * MelodyTiming.beatSeconds(tempoBpm)))
-                    notePlayer.playSequence(MelodyTiming.schedule(melody, tempoBpm))
-                    delay(millis(MelodyTiming.totalSeconds(melody.size, tempoBpm)))
+                    val sequence = MelodyTiming.schedule(melody, tempoBpm)
+                    notePlayer.playSequence(sequence)
+                    delay(millis(MelodyTiming.totalSeconds(sequence, tempoBpm)))
                 }
             } finally {
                 _uiState.update { it.copy(playback = Playback.NOTHING, revealedNote = null) }
@@ -339,15 +376,15 @@ class PracticeViewModel(
     // --- shared ------------------------------------------------------------------------------
 
     /**
-     * Hands [notes] to the engine, which times them sample-accurately, and flips the UI back once
-     * they must be over. A scored answer that is still open is told the keys are available then.
+     * Hands [sequence] to the engine, which times it sample-accurately, and flips the UI back once
+     * it must be over. A scored answer that is still open is told the keys are available then.
      */
-    private fun startPlayback(notes: List<Int>, what: Playback) {
+    private fun startPlayback(sequence: List<TimedNote>, what: Playback) {
         playbackJob?.cancel()
         _uiState.update { it.copy(playback = what, revealedNote = null) }
-        notePlayer.playSequence(MelodyTiming.schedule(notes, tempoBpm))
+        notePlayer.playSequence(sequence)
         playbackJob = viewModelScope.launch {
-            delay(millis(MelodyTiming.totalSeconds(notes.size, tempoBpm)))
+            delay(millis(MelodyTiming.totalSeconds(sequence, tempoBpm)))
             _uiState.update { it.copy(playback = Playback.NOTHING) }
             inputOpenedIfAnswering()
         }
@@ -358,6 +395,10 @@ class PracticeViewModel(
         playbackJob?.cancel()
         playbackJob = null
         _uiState.update { it.copy(playback = Playback.NOTHING, revealedNote = null) }
+    }
+
+    private fun log(record: AttemptRecord) {
+        if (Features.LOG_ATTEMPTS) attemptLog.append(record)
     }
 
     private fun millis(seconds: Double): Long = (seconds * 1000).toLong()
@@ -380,6 +421,7 @@ class PracticeViewModelFactory(private val context: Context) : ViewModelProvider
         return PracticeViewModel(
             notePlayer = MixerNotePlayer(appContext),
             settingsStore = SharedPreferencesSettingsStore(appContext),
+            attemptLog = FileAttemptLog(appContext),
             clock = RealClock,
         ) as T
     }

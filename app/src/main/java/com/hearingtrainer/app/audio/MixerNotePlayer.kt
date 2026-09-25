@@ -31,12 +31,12 @@ import kotlin.math.tanh
  *    holds the lock only while mixing a 5 ms block (a few microseconds of work), never while
  *    blocked in `write`, so the UI thread never waits on the audio hardware.
  *
- * Per-voice level and the soft clipper mean two full notes at once stay clean and a pile of
- * notes gets gently compressed instead of crackling.
+ * Per-voice level (a [TimedNote.gain] on top of [Config.VOICE_GAIN]) and the soft clipper mean two
+ * full notes at once stay clean and a pile of notes gets gently compressed instead of crackling.
  */
 class MixerNotePlayer(context: Context) : NotePlayer {
 
-    private class Voice(val samples: FloatArray, val startFrame: Long, var releaseFrame: Long) {
+    private class Voice(val samples: FloatArray, val startFrame: Long, var releaseFrame: Long, val level: Float = 1f) {
         var position = 0 // next sample to read
         var gain = 1f // release envelope; the voice is dropped once this reaches 0
     }
@@ -76,7 +76,7 @@ class MixerNotePlayer(context: Context) : NotePlayer {
                 val samples = bank[timed.note] ?: continue
                 val start = base + (timed.startSeconds * sampleRate).roundToLong()
                 val release = start + (timed.durationSeconds * sampleRate).roundToLong()
-                schedule(Voice(samples, startFrame = start, releaseFrame = release))
+                schedule(Voice(samples, startFrame = start, releaseFrame = release, level = timed.gain))
             }
         }
     }
@@ -197,9 +197,10 @@ class MixerNotePlayer(context: Context) : NotePlayer {
                 var position = voice.position
                 val samples = voice.samples
                 var gain = voice.gain
+                val level = Config.VOICE_GAIN * voice.level
                 while (i < BLOCK_FRAMES && position < samples.size && gain > 0f) {
                     if (frame >= voice.releaseFrame) gain -= releaseStep
-                    block[i] += samples[position] * (if (gain > 0f) gain else 0f) * Config.VOICE_GAIN
+                    block[i] += samples[position] * (if (gain > 0f) gain else 0f) * level
                     i++
                     frame++
                     position++
