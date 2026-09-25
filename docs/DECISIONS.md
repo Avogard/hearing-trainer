@@ -220,3 +220,35 @@ leaked a SoundPool every time you went Home and back. Now the factory builds `Mi
 the application context inside the ViewModel, `onCleared` releases it, and the screen's
 `DisposableEffect` calls `setActive(true/false)` so the audio output only runs while Practice is on
 screen. Returning to Practice also returns to the exact state you left (mid-answer included).
+
+## 2026-09-25 — Scored answers commit as you play; free play kept as a second mode
+
+With Replay / My answer / undo / Check, an answer could be edited until it sounded right, so every
+melody ended at 100% and the only skill measured was comparing two sounds. Playing by ear means
+hearing which note it is *before* pressing it, so the default answer mode is now scored: every key
+press is the answer for its position (right: green, on to the next; wrong: red, try again; after
+`Config.MAX_WRONG_PRESSES_PER_NOTE` wrong presses the app reveals the note and moves on), Replay is
+limited to `Config.MAX_REPLAYS_BEFORE_FIRST_PRESS` times and only before the first press, and the
+melody finishes itself. The score is first-try notes over all notes. This is what the ear-training
+apps that actually measure progress do (score as you play, hearings budgeted), and it is what
+docs/PLAN.md's "Product design" asks for. Feedback names the confusion ("3rd note: you played E4,
+it was F4") and nothing else: no praise, no penalty language.
+
+The old flow stays as **Free play**, one tap away on the Practice screen, because it is how people
+hunt for a tune and explore the keyboard; it just never counts toward anything. The toggle is
+disabled while a melody is being answered (the plainer option: no abandon path, nothing to log
+half-way). Scored mode and the toggle sit behind `Features.SCORED_ANSWER_MODE`; with it off the
+screen is free play only. This supersedes the 2026-09-24 entry "Answers are checked on demand"
+for the default mode; that flow survives unchanged as Free play.
+
+Mechanics: `core/ScoredAnswer.kt` is the per-melody state machine (pure Kotlin, takes times as
+parameters, 15 tests); the ViewModel owns one per melody and derives the strip from it. Response
+time per position runs from the moment the keys became available (end of playback, the previous
+position resolving, the end of a reveal) — narrower than "from the previous position resolving",
+so the reveal's 700 ms input lockout isn't counted as thinking time. The pressed note sounds at the
+press and the revealed note `Config.REVEAL_DELAY_MILLIS` later, so the two don't clash. After a
+non-clean melody the replay waits `Config.REPLAY_AFTER_FINISH_GAP_BEATS`, because starting a
+sequence fades whatever is still sounding and would cut off the user's last note. The old result
+type `ScoredAnswer` (from `AnswerScorer.score`) was renamed `AnswerScore` to free the name.
+`core/Clock.kt` (interface) and `data/RealClock.kt` are the first use of the `Clock` boundary from
+CLAUDE.md.

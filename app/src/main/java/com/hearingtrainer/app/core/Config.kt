@@ -20,6 +20,30 @@ object Config {
     const val MIN_MELODY_LENGTH = 2
     const val MAX_MELODY_LENGTH = 8
 
+    // --- scored answer mode (see docs/SPEC.md, "Answer modes", and core/ScoredAnswer.kt) ---
+
+    /** How many times the melody may be replayed before the first key press of a scored answer. */
+    const val MAX_REPLAYS_BEFORE_FIRST_PRESS = 2
+
+    /** Wrong presses allowed at one position before the app reveals the note and moves on. */
+    const val MAX_WRONG_PRESSES_PER_NOTE = 2
+
+    /**
+     * On a reveal, the pressed (wrong) note sounds first; the correct note and its key highlight
+     * follow this much later so the two don't clash.
+     */
+    const val REVEAL_DELAY_MILLIS = 300L
+
+    /** How long the correct key stays lit when a note is revealed. */
+    const val REVEAL_HIGHLIGHT_MILLIS = 400L
+
+    /**
+     * After the last note of a scored melody that wasn't all first try, this much silence before
+     * the melody plays once more, so the user's last note isn't cut off (starting a sequence fades
+     * whatever is still sounding).
+     */
+    const val REPLAY_AFTER_FINISH_GAP_BEATS = 1.0
+
     // --- playback feel ---
 
     /**
