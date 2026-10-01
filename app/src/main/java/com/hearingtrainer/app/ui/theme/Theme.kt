@@ -1,58 +1,73 @@
 package com.hearingtrainer.app.ui.theme
 
-import android.app.Activity
-import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
-
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = AccentLight,
     onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    primaryContainer = AccentSoftLight,
+    onPrimaryContainer = InkLight,
+    secondary = InkLight,
+    onSecondary = PaperLight,
+    background = PaperLight,
+    onBackground = InkLight,
+    surface = SurfaceLight,
+    onSurface = InkLight,
+    surfaceVariant = SoftLight,
+    onSurfaceVariant = MutedLight,
+    outline = LineLight,
+    outlineVariant = LineLight,
+    error = Color(0xFFC8402B),
+    onError = Color.White,
 )
 
+private val DarkColorScheme = darkColorScheme(
+    primary = AccentDark,
+    onPrimary = OnAccentDark,
+    primaryContainer = AccentSoftDark,
+    onPrimaryContainer = InkDark,
+    secondary = InkDark,
+    onSecondary = PaperDark,
+    background = PaperDark,
+    onBackground = InkDark,
+    surface = SurfaceDark,
+    onSurface = InkDark,
+    surfaceVariant = SoftDark,
+    onSurfaceVariant = MutedDark,
+    outline = LineDark,
+    outlineVariant = LineDark,
+    error = Color(0xFFE3624C),
+    onError = Color(0xFF12110F),
+)
+
+/**
+ * The app's theme. No Material "dynamic colour": on Android 12+ that would replace the palette
+ * with one derived from the wallpaper, and the paper-and-ink look is the design.
+ */
 @Composable
 fun HearingTrainerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
     content: @Composable () -> Unit
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
+    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
+    val hearingColors = if (darkTheme) DarkHearingColors else LightHearingColors
+    CompositionLocalProvider(LocalHearingColors provides hearingColors) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            content = content
+        )
     }
+}
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        content = content
-    )
+/** Access to the colours beyond Material's scheme: `HearingTheme.colors.correct`. */
+object HearingTheme {
+    val colors: HearingColors
+        @Composable get() = LocalHearingColors.current
 }

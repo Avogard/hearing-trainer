@@ -289,3 +289,33 @@ needs queries (with a migration that imports this file). The JSON is written by 
 worth a dependency. `core/AttemptRecord` + `core/AttemptLog` (interface); `data/FileAttemptLog`
 does the writing on its own single thread so the UI never waits for the disk and lines never
 interleave. `Features.LOG_ATTEMPTS`.
+
+## 2026-10-01 — A visual design of our own: paper and ink, serif headings, no dynamic colour
+
+The screens had the wizard's purple Material defaults. The owner asked for a modern, intuitive
+design; it was drawn first as a canvas ("Hearing Trainer UI", seven phone artboards: Home,
+Practice mid-answer, Practice done, Session summary, Settings, Free play, dark mode) and then
+built into `ui/`. The look: a warm off-white ground, near-black ink, one blue accent, white
+cards with a hairline border, a serif for big numbers and headings over a sans for everything
+else. `ui/theme/` holds the palette (light and dark) and type scale; `ui/components/` the
+handful of shared pieces (primary / secondary / icon-square buttons, cards, chips, the icons,
+drawn with Canvas because Material 3 no longer bundles an icon set and six icons don't justify a
+dependency).
+
+Choices worth knowing:
+
+- Material's dynamic colour is off. On Android 12+ it would replace the palette with one derived
+  from the wallpaper, and the paper-and-ink look *is* the design.
+- The answer-strip dots are 44 dp and differ by shape as well as colour (filled green + check,
+  amber ring + check, red + cross, accent ring for the open position), so the states read without
+  colour — the colour-blind item from docs/IDEAS.md, done at no cost.
+- Keys outside the level's range are visibly greyed, black keys included, and white keys show
+  their note name. Reveal lights the key in the accent colour.
+- Scored mode's empty primary slot while answering now carries "Every key you press is your
+  answer": a first-time user otherwise wonders where the Check button went.
+- The fonts are the system serif and sans for now (Noto Serif / Roboto on most phones). The
+  canvas uses Fraunces and Manrope (both OFL); bundling them in `res/font` is a later, separate
+  step that needs the font files.
+- Home's streak number and week strip from the design are *not* built: they need the progress
+  store. Showing made-up numbers was ruled out; the card shows only what is real (level, key,
+  the two settings).
