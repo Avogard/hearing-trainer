@@ -38,27 +38,32 @@ the applicationId forever, so pick the real name first.
    root. Both are gitignored. `app/build.gradle.kts` signs the release
    build with them when they exist and leaves it unsigned when they do not.
 
-2. **Create a Firebase project** at https://console.firebase.google.com
-   (any Google account; the free Spark plan is enough for App Distribution).
-   In it, add an Android app with package name `com.hearingtrainer.app`.
-   Skip the `google-services.json` download: the app does not use the
-   Firebase SDK, only the upload service.
-
-3. **Copy the App ID.** Project settings, General, Your apps. It looks like
-   `1:123456789012:android:0a1b2c3d4e5f6a7b`. Put it on one line in
-   `.firebase-app-id` at the repo root (not secret; commit it).
-
-4. **Enable App Distribution** in the console (Release & Monitor, App
-   Distribution, Get started) and create a tester group named `testers`
-   with the emails of the people who get builds.
-
-5. **Install the Firebase CLI** and sign in. Two options; the first needs
+2. **Install the Firebase CLI** and sign in. The standalone binary needs
    no Node.js:
 
-       curl -sL https://firebase.tools | bash     # standalone binary
+       curl -sL https://firebase.tools | bash
        firebase login                              # opens a browser once
 
-   or, if Node.js is installed: `npm install -g firebase-tools`.
+3. **Create the Firebase project and register the app.** Done on
+   2026-10-12 from the CLI; the project is `hearing-trainer-app`, the
+   Android app is `com.hearingtrainer.app`, and its App ID is committed in
+   `.firebase-app-id` (not a secret). To redo it, for example after the
+   applicationId changes:
+
+       firebase apps:create android "Hearing Trainer" \
+         --package-name NEW.PACKAGE.NAME --project hearing-trainer-app
+       # paste the printed App ID into .firebase-app-id
+
+   Skip `google-services.json`: the app does not use the Firebase SDK, only
+   the upload service.
+
+4. **Tester group.** A group with alias `testers` exists. Add people with
+
+       firebase appdistribution:testers:add someone@example.com \
+         --group-alias testers --project hearing-trainer-app
+
+   The console equivalent is Release & Monitor, App Distribution, Testers &
+   Groups.
 
 ## Every release
 
