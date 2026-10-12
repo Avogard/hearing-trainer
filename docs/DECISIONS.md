@@ -319,3 +319,26 @@ Choices worth knowing:
 - Home's streak number and week strip from the design are *not* built: they need the progress
   store. Showing made-up numbers was ruled out; the card shows only what is real (level, key,
   the two settings).
+
+## 2026-10-12 — Testers get builds through Firebase App Distribution, signed with our own key
+
+Before Google Play (M5), a few people need to install the app. Options were a signed APK
+passed around by hand, Firebase App Distribution, or Play's internal-testing track. Play was
+ruled out for now because the first upload fixes the applicationId forever and PLAN.md says the
+name and id will change before the store. Firebase won over a hand-shared APK because testers
+get a link and update notices and the upload is one command; it locks nothing in.
+
+Choices worth knowing:
+
+- The app does not use the Firebase SDK. Only the Firebase CLI on the laptop talks to Firebase,
+  so there is no new dependency in the APK and nothing to remove later. The Firebase Gradle
+  plugin was skipped for the same reason; it would also need the CLI login anyway.
+- The release key is a PKCS12 keystore made by `tools/make-release-keystore.sh`, kept at the
+  repo root and gitignored together with `keystore.properties`. `app/build.gradle.kts` reads the
+  properties file if present and otherwise builds an unsigned release, so CI and fresh clones
+  still compile. The key must be backed up by hand: APK-installed users can only update to
+  builds signed with it. On Play, Play App Signing will take over that risk.
+- `versionCode` is still bumped by hand before each upload. Deriving it from the git commit
+  count was considered and rejected: it ties the build to the checkout and is one more thing to
+  explain. Revisit if forgetting the bump becomes a habit.
+- `.firebase-app-id` (not a secret) will be committed so the ship script works from any clone.

@@ -19,6 +19,8 @@ two reasonable options, name both and recommend one.
 - Unit tests: ./gradlew testDebugUnitTest
 - Install:    ./gradlew installDebug   (phone connected, USB debugging on)
 - Lint:       ./gradlew lint
+- Release APK (signed when keystore.properties exists): ./gradlew assembleRelease
+- Ship to testers via Firebase App Distribution: tools/ship-firebase.sh  (setup: docs/SHIPPING.md)
 - Logs:       adb logcat -s HearingTrainer
 - Core-only tests without the Android SDK: tools/verify-core.sh
 - Re-render piano samples: python3 tools/render_piano_samples.py
@@ -109,5 +111,6 @@ two reasonable options, name both and recommend one.
                     by phase, roadmap. Sections 7–9 drive what to build next.
 - docs/SPEC.md      what the app does (screens, rules, difficulty ladder)
 - docs/DECISIONS.md why it is built this way
+- docs/SHIPPING.md   how a build reaches testers (Firebase) and, later, Google Play
 - docs/research/    the sourced research behind PLAN.md (pedagogy, learning
                     science, landscape); consult before changing the engine

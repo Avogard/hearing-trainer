@@ -13,3 +13,8 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Release signing (created by tools/make-release-keystore.sh; back them up, never commit)
+/keystore.properties
+*.jks
+*.keystore

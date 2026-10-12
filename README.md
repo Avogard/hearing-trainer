@@ -59,4 +59,5 @@ docs/      plan, spec, design decisions, research
 - [docs/PLAN.md](docs/PLAN.md): vision, learning model, roadmap
 - [docs/SPEC.md](docs/SPEC.md): what the app does, screen by screen
 - [docs/DECISIONS.md](docs/DECISIONS.md): why it's built this way
+- [docs/SHIPPING.md](docs/SHIPPING.md): how a build reaches testers and, later, Google Play
 - [docs/research/](docs/research/): the research behind the plan
