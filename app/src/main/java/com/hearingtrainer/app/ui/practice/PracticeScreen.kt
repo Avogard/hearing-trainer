@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -38,6 +40,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.hearingtrainer.app.core.AnswerMode
@@ -119,6 +122,7 @@ fun PracticeScreen(onDone: () -> Unit, modifier: Modifier = Modifier) {
             AnswerStrip(
                 dots = uiState.dots,
                 openPosition = uiState.openPosition,
+                undoSlot = uiState.mode == AnswerMode.FREE,
                 canUndo = uiState.mode == AnswerMode.FREE &&
                     uiState.phase == PracticePhase.ANSWERING &&
                     uiState.answer.isNotEmpty() &&
@@ -202,41 +206,48 @@ private fun ToggleHalf(text: String, selected: Boolean, enabled: Boolean, onClic
  * states read without colour): filled green with a check = right first try, an amber ring with a
  * check = found after wrong presses, filled red with a cross = wrong or revealed, filled ink =
  * played (free play, not checked yet). The dot at [openPosition] (scored: the one the next press
- * answers) gets an accent ring. The undo button (free play only) sits at the end of the row; its
- * slot is always reserved, with a twin on the left, so the dots stay centred.
+ * answers) gets an accent ring. Dots are 44 dp when they fit and shrink evenly when a long melody
+ * needs it (length goes up to 8). In free play the undo button sits at the end of the row, its
+ * slot always reserved so the dots don't shift when it appears.
  */
 @Composable
 private fun AnswerStrip(
     dots: List<DotState>,
     openPosition: Int?,
+    undoSlot: Boolean,
     canUndo: Boolean,
     onUndo: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Row(
-        modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(DOT_GAP),
-    ) {
-        Spacer(modifier = Modifier.size(DOT_SIZE))
-        Row(horizontalArrangement = Arrangement.spacedBy(DOT_GAP)) {
+    BoxWithConstraints(modifier = modifier.fillMaxWidth().height(DOT_SIZE)) {
+        val reserved = if (undoSlot) DOT_SIZE + DOT_GAP else 0.dp
+        val count = dots.size.coerceAtLeast(1)
+        val fit = (maxWidth - reserved - DOT_GAP * (count - 1)) / count
+        val dotSize = if (fit < DOT_SIZE) fit else DOT_SIZE
+        Row(
+            modifier = Modifier.width(maxWidth - reserved).fillMaxHeight(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(DOT_GAP, Alignment.CenterHorizontally),
+        ) {
             dots.forEachIndexed { index, dot ->
-                AnswerDot(state = dot, open = index == openPosition)
+                AnswerDot(state = dot, open = index == openPosition, size = dotSize)
             }
         }
-        Box(modifier = Modifier.size(DOT_SIZE)) {
-            if (canUndo) {
-                IconSquareButton(onClick = onUndo, contentDescription = "Undo last note") { UndoIcon() }
-            }
+        if (canUndo) {
+            IconSquareButton(
+                onClick = onUndo,
+                contentDescription = "Undo last note",
+                modifier = Modifier.align(Alignment.CenterEnd),
+            ) { UndoIcon() }
         }
     }
 }
 
 @Composable
-private fun AnswerDot(state: DotState, open: Boolean) {
+private fun AnswerDot(state: DotState, open: Boolean, size: Dp) {
     val colors = HearingTheme.colors
     val scheme = MaterialTheme.colorScheme
-    var shape = Modifier.size(DOT_SIZE).clip(CircleShape)
+    var shape = Modifier.size(size).clip(CircleShape)
     shape = when (state) {
         DotState.EMPTY -> if (open) {
             shape.background(scheme.primaryContainer).border(3.dp, scheme.primary, CircleShape)
@@ -253,9 +264,9 @@ private fun AnswerDot(state: DotState, open: Boolean) {
     }
     Box(modifier = shape, contentAlignment = Alignment.Center) {
         when (state) {
-            DotState.CORRECT -> CheckIcon(size = 22.dp, tint = colors.onStatus)
-            DotState.FOUND -> CheckIcon(size = 20.dp, tint = colors.found)
-            DotState.WRONG -> CrossIcon(size = 20.dp, tint = colors.onStatus)
+            DotState.CORRECT -> CheckIcon(size = size / 2, tint = colors.onStatus)
+            DotState.FOUND -> CheckIcon(size = size * 0.45f, tint = colors.found)
+            DotState.WRONG -> CrossIcon(size = size * 0.45f, tint = colors.onStatus)
             DotState.EMPTY, DotState.FILLED -> Unit
         }
     }

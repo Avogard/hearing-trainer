@@ -121,8 +121,9 @@ private fun WhiteKey(note: Int, dimmed: Boolean, lit: Boolean, onPressed: (Int) 
         shape = WHITE_KEY_SHAPE,
         labelColor = labelColor,
         labelSize = 13.sp,
+        labelInset = 12.dp,
         onPressed = onPressed,
-        modifier = modifier.padding(bottom = 12.dp),
+        modifier = modifier,
     )
 }
 
@@ -144,8 +145,9 @@ private fun BlackKey(note: Int, dimmed: Boolean, lit: Boolean, onPressed: (Int) 
         shape = BLACK_KEY_SHAPE,
         labelColor = if (lit) scheme.onPrimary else colors.blackKeyLabel,
         labelSize = 11.sp,
+        labelInset = 10.dp,
         onPressed = onPressed,
-        modifier = modifier.padding(bottom = 10.dp),
+        modifier = modifier,
     )
 }
 
@@ -158,18 +160,22 @@ private fun Key(
     shape: RoundedCornerShape,
     labelColor: Color,
     labelSize: TextUnit,
+    labelInset: Dp,
     onPressed: (Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val spokenName = MidiNote.name(note).replace("#", " sharp ")
+    // Order matters: the caller's layout modifiers (offset, width, weight) come first, so the
+    // key's background and clip are drawn where the key is placed; the label inset comes last,
+    // inside the background, so it only moves the text, not the key.
     Box(
-        modifier = Modifier
+        modifier = modifier
             .clip(shape)
             .background(background)
             .then(if (border != null) Modifier.border(1.dp, border, shape) else Modifier)
             .clickable { onPressed(note) }
             .semantics { contentDescription = spokenName }
-            .then(modifier),
+            .padding(bottom = labelInset),
         contentAlignment = Alignment.BottomCenter,
     ) {
         Text(
